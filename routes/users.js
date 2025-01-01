@@ -2,6 +2,7 @@ const express = require('express')
 const bcrypt = require('bcrypt')
 const admin = require('firebase-admin')
 const multer = require('multer')
+const fs = require('fs')
 
 const router = express.Router()
 const db = admin.firestore() // Gunakan Firestore
@@ -25,6 +26,10 @@ router.post('/register', upload.single('profilePic'), async (req, res) => {
 	const profilePic = req.file ? `/uploads/${req.file.filename}` : '' // Path file yang diunggah
 
 	if (!displayName || !email || !password) {
+		// Hapus file yang diunggah jika validasi gagal
+		if (req.file) {
+			fs.unlinkSync(req.file.path) // Menghapus file
+		}
 		return res
 			.status(400)
 			.json({ error: 'Email, displayName, dan password wajib diisi.' })
@@ -37,6 +42,10 @@ router.post('/register', upload.single('profilePic'), async (req, res) => {
 			.where('email', '==', email)
 			.get()
 		if (!emailCheckSnapshot.empty) {
+			// Hapus file yang diunggah jika email sudah digunakan
+			if (req.file) {
+				fs.unlinkSync(req.file.path) // Menghapus file
+			}
 			return res.status(400).json({ error: 'Email sudah digunakan.' })
 		}
 
@@ -60,6 +69,10 @@ router.post('/register', upload.single('profilePic'), async (req, res) => {
 			.status(201)
 			.json({ message: 'Registrasi berhasil!', userId, profilePic })
 	} catch (error) {
+		// Hapus file yang diunggah jika terjadi error saat registrasi
+		if (req.file) {
+			fs.unlinkSync(req.file.path) // Menghapus file
+		}
 		console.error('Error saat registrasi:', error)
 		res.status(500).json({ error: error.message })
 	}

@@ -2,12 +2,15 @@ const express = require('express')
 const admin = require('firebase-admin')
 const bodyParser = require('body-parser')
 const path = require('path')
-
-var serviceAccount = require('./budgetly-app-dcdg-firebase-adminsdk-lsmep-b84b393414.json')
+require('dotenv').config()
 
 // Inisialisasi Firebase
 admin.initializeApp({
-	credential: admin.credential.cert(serviceAccount),
+	credential: admin.credential.cert({
+		projectId: process.env.FIREBASE_PROJECT_ID,
+		privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+		clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+	}),
 })
 
 // Import modul
