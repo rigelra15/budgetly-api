@@ -128,3 +128,5 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+.budgetly-app-dcdg-firebase-adminsdk-lsmep-b84b393414.json
