@@ -1,7 +1,7 @@
 const express = require('express')
 const admin = require('firebase-admin')
 const router = express.Router()
-const db = admin.firestore()
+const db = admin.app('mainApp').firestore()
 
 // Endpoint untuk menambahkan tabungan baru
 router.post('/', async (req, res) => {

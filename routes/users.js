@@ -1,3 +1,4 @@
+const { v4: uuidv4 } = require('uuid')
 const express = require('express')
 const bcrypt = require('bcrypt')
 const admin = require('firebase-admin')
@@ -5,80 +6,83 @@ const multer = require('multer')
 const fs = require('fs')
 
 const router = express.Router()
-const db = admin.firestore() // Gunakan Firestore
+const db = admin.app('mainApp').firestore()
+const storageBucket = admin.app('storageApp').storage().bucket()
 
-// Konfigurasi multer untuk menyimpan file di folder "uploads"
-const storage = multer.diskStorage({
-	destination: (req, file, cb) => {
-		cb(null, 'uploads/') // Direktori tempat file disimpan
-	},
-	filename: (req, file, cb) => {
-		const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9)
-		cb(null, `${uniqueSuffix}-${file.originalname}`)
-	},
-})
+const upload = multer({ storage: multer.memoryStorage() })
 
-const upload = multer({ storage })
+const generateSignedUrl = async (fileName) => {
+	const options = {
+		version: 'v4',
+		action: 'read',
+		expires: Date.now() + 15 * 60 * 1000,
+	}
 
-// Endpoint registrasi
+	try {
+		const [url] = await storageBucket.file(fileName).getSignedUrl(options)
+		return url
+	} catch (error) {
+		console.error('Error generating signed URL:', error)
+		throw error
+	}
+}
+
 router.post('/register', upload.single('profilePic'), async (req, res) => {
 	const { displayName, email, password } = req.body
-	const profilePic = req.file ? `/uploads/${req.file.filename}` : '' // Path file yang diunggah
 
 	if (!displayName || !email || !password) {
-		// Hapus file yang diunggah jika validasi gagal
-		if (req.file) {
-			fs.unlinkSync(req.file.path) // Menghapus file
-		}
 		return res
 			.status(400)
 			.json({ error: 'Email, displayName, dan password wajib diisi.' })
 	}
 
 	try {
-		// Periksa apakah email sudah digunakan
 		const emailCheckSnapshot = await db
 			.collection('users')
 			.where('email', '==', email)
 			.get()
 		if (!emailCheckSnapshot.empty) {
-			// Hapus file yang diunggah jika email sudah digunakan
-			if (req.file) {
-				fs.unlinkSync(req.file.path) // Menghapus file
-			}
 			return res.status(400).json({ error: 'Email sudah digunakan.' })
 		}
 
-		// Hash password
 		const hashedPassword = await bcrypt.hash(password, 10)
 
-		// Buat ID unik untuk pengguna
 		const userId = db.collection('users').doc().id
 
-		// Simpan pengguna ke Firestore
+		let profilePicPath = null
+		if (req.file) {
+			const uniqueFileName = `budgetlyApp/profiles/${uuidv4()}-${
+				req.file.originalname
+			}`
+			const file = storageBucket.file(uniqueFileName)
+
+			await file.save(req.file.buffer, {
+				metadata: { contentType: req.file.mimetype },
+			})
+
+			profilePicPath = uniqueFileName
+		}
+
 		await db.collection('users').doc(userId).set({
 			id: userId,
 			email,
 			displayName,
 			password: hashedPassword,
-			profilePic, // Path file yang diunggah
+			profilePic: profilePicPath,
 			createdAt: admin.firestore.FieldValue.serverTimestamp(),
 		})
 
-		res
-			.status(201)
-			.json({ message: 'Registrasi berhasil!', userId, profilePic })
+		res.status(201).json({
+			message: 'Registrasi berhasil!',
+			userId,
+			profilePicPath,
+		})
 	} catch (error) {
-		// Hapus file yang diunggah jika terjadi error saat registrasi
-		if (req.file) {
-			fs.unlinkSync(req.file.path) // Menghapus file
-		}
 		console.error('Error saat registrasi:', error)
 		res.status(500).json({ error: error.message })
 	}
 })
 
-// Endpoint login
 router.post('/login', async (req, res) => {
 	const { email, password } = req.body
 
@@ -87,7 +91,6 @@ router.post('/login', async (req, res) => {
 	}
 
 	try {
-		// Cari pengguna berdasarkan email
 		const userSnapshot = await db
 			.collection('users')
 			.where('email', '==', email)
@@ -100,7 +103,6 @@ router.post('/login', async (req, res) => {
 		const userDoc = userSnapshot.docs[0]
 		const userData = userDoc.data()
 
-		// Validasi password
 		const isPasswordValid = await bcrypt.compare(password, userData.password)
 		if (!isPasswordValid) {
 			return res.status(401).json({ error: 'Password salah.' })
@@ -119,7 +121,6 @@ router.post('/login', async (req, res) => {
 	}
 })
 
-// Endpoint ambil data pengguna yang sedang login
 router.get('/user/:userId', async (req, res) => {
 	const { userId } = req.params
 
@@ -144,7 +145,6 @@ router.get('/user/:userId', async (req, res) => {
 	}
 })
 
-// Endpoint update data pengguna
 router.put('/user/:userId', async (req, res) => {
 	const { userId } = req.params
 	const { displayName, email } = req.body
@@ -168,7 +168,6 @@ router.put('/user/:userId', async (req, res) => {
 	}
 })
 
-// Endpoint hapus data pengguna
 router.delete('/user/:userId', async (req, res) => {
 	const { userId } = req.params
 
@@ -186,7 +185,42 @@ router.delete('/user/:userId', async (req, res) => {
 	}
 })
 
-// Endpoint list data pengguna
+router.get('/user/:userId/profile-pic', async (req, res) => {
+	const { userId } = req.params
+
+	if (!userId) {
+		return res.status(400).json({ error: 'User ID wajib diisi.' })
+	}
+
+	try {
+		const userDoc = await db.collection('users').doc(userId).get()
+
+		if (!userDoc.exists) {
+			return res.status(404).json({ error: 'Pengguna tidak ditemukan.' })
+		}
+
+		const userData = userDoc.data()
+		const filePath = userData.profilePic
+
+		if (!filePath) {
+			return res.status(404).json({ error: 'Foto profil tidak ditemukan.' })
+		}
+
+		const options = {
+			version: 'v4',
+			action: 'read',
+			expires: Date.now() + 15 * 60 * 1000,
+		}
+
+		const [signedUrl] = await storageBucket.file(filePath).getSignedUrl(options)
+
+		res.status(200).json({ signedUrl })
+	} catch (error) {
+		console.error('Error saat membuat Signed URL:', error)
+		res.status(500).json({ error: error.message })
+	}
+})
+
 router.get('/', async (req, res) => {
 	try {
 		const usersSnapshot = await db.collection('users').get()

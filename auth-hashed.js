@@ -10,7 +10,7 @@ admin.initializeApp({
 	databaseURL: 'https://budgetly-app-dcdg.firebaseio.com', // Ganti dengan URL database Anda
 })
 
-const db = admin.firestore() // Gunakan Firestore
+const db = admin.app('mainApp').firestore() // Gunakan Firestore
 const app = express()
 const PORT = 3000
 
