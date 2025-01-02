@@ -37,6 +37,7 @@ router.post('/register', upload.single('profilePic'), async (req, res) => {
 	}
 
 	try {
+		// Periksa apakah email sudah digunakan
 		const emailCheckSnapshot = await db
 			.collection('users')
 			.where('email', '==', email)
@@ -45,30 +46,39 @@ router.post('/register', upload.single('profilePic'), async (req, res) => {
 			return res.status(400).json({ error: 'Email sudah digunakan.' })
 		}
 
+		// Hash password
 		const hashedPassword = await bcrypt.hash(password, 10)
 
+		// Buat ID unik untuk pengguna
 		const userId = db.collection('users').doc().id
 
 		let profilePicPath = null
+
 		if (req.file) {
+			// Jika ada file yang diunggah
 			const uniqueFileName = `budgetlyApp/profiles/${uuidv4()}-${
 				req.file.originalname
 			}`
 			const file = storageBucket.file(uniqueFileName)
 
+			// Simpan file ke Firebase Storage
 			await file.save(req.file.buffer, {
 				metadata: { contentType: req.file.mimetype },
 			})
 
 			profilePicPath = uniqueFileName
+		} else {
+			// Jika tidak ada file yang diunggah, gunakan foto default
+			profilePicPath = 'budgetlyApp/profiles/logo_budgetly.png' // Lokasi foto default
 		}
 
+		// Simpan pengguna ke Firestore
 		await db.collection('users').doc(userId).set({
 			id: userId,
 			email,
 			displayName,
 			password: hashedPassword,
-			profilePic: profilePicPath,
+			profilePic: profilePicPath, // Path ke foto profil (default atau unggahan)
 			createdAt: admin.firestore.FieldValue.serverTimestamp(),
 		})
 
@@ -220,6 +230,53 @@ router.get('/user/:userId/profile-pic', async (req, res) => {
 		res.status(500).json({ error: error.message })
 	}
 })
+
+router.put(
+	'/user/:userId/profile-pic',
+	upload.single('profilePic'),
+	async (req, res) => {
+		const { userId } = req.params
+
+		if (!userId) {
+			return res.status(400).json({ error: 'User ID wajib diisi.' })
+		}
+
+		try {
+			const userDoc = await db.collection('users').doc(userId).get()
+
+			if (!userDoc.exists) {
+				return res.status(404).json({ error: 'Pengguna tidak ditemukan.' })
+			}
+
+			const userData = userDoc.data()
+
+			let profilePicPath = userData.profilePic
+			if (req.file) {
+				const uniqueFileName = `budgetlyApp/profiles/${uuidv4()}-${
+					req.file.originalname
+				}`
+				const file = storageBucket.file(uniqueFileName)
+
+				await file.save(req.file.buffer, {
+					metadata: { contentType: req.file.mimetype },
+				})
+
+				profilePicPath = uniqueFileName
+			}
+
+			await db.collection('users').doc(userId).update({
+				profilePic: profilePicPath,
+			})
+
+			res
+				.status(200)
+				.json({ message: 'Foto profil berhasil diupdate.', profilePicPath })
+		} catch (error) {
+			console.error('Error saat mengupdate foto profil:', error)
+			res.status(500).json({ error: error.message })
+		}
+	}
+)
 
 router.get('/', async (req, res) => {
 	try {
