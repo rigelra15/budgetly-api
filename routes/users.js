@@ -139,6 +139,7 @@ router.get('/user/:userId', async (req, res) => {
 	}
 
 	try {
+		// Ambil data pengguna
 		const userDoc = await db.collection('users').doc(userId).get()
 
 		if (!userDoc.exists) {
@@ -146,9 +147,67 @@ router.get('/user/:userId', async (req, res) => {
 		}
 
 		const userData = userDoc.data()
-		delete userData.password
+		delete userData.password // Jangan sertakan password dalam response
 
-		res.status(200).json(userData)
+		const transactions = []
+		const savings = []
+		const budgets = []
+		const aiInsights = []
+
+		// Ambil data transaksi terkait pengguna ini
+		const transactionsSnapshot = await db
+			.collection('transactions')
+			.where('userId', '==', userId)
+			.get()
+
+		// Ambil data tabungan terkait pengguna ini
+		const savingsSnapshot = await db
+			.collection('savings')
+			.where('userId', '==', userId)
+			.get()
+
+		// Ambil data anggaran terkait pengguna ini
+		const budgetsSnapshot = await db
+			.collection('budgets')
+			.where('userId', '==', userId)
+			.get()
+
+		// Ambil data AI Insights terkait pengguna ini
+		const aiInsightsSnapshot = await db
+			.collection('aiInsights')
+			.where('userId', '==', userId)
+			.get()
+
+		// Masukkan data transaksi ke dalam array
+		transactionsSnapshot.forEach((doc) => {
+			transactions.push({ id: doc.id, ...doc.data() })
+		})
+
+		// Masukkan data tabungan ke dalam array
+		savingsSnapshot.forEach((doc) => {
+			savings.push({ id: doc.id, ...doc.data() })
+		})
+
+		// Masukkan data anggaran ke dalam array
+		budgetsSnapshot.forEach((doc) => {
+			budgets.push({ id: doc.id, ...doc.data() })
+		})
+
+		// Masukkan data AI Insights ke dalam array
+		aiInsightsSnapshot.forEach((doc) => {
+			aiInsights.push({ id: doc.id, ...doc.data() })
+		})
+
+		// Gabungkan data transaksi dengan data pengguna
+		const responseData = {
+			...userData,
+			transactions,
+			savings,
+			budgets,
+			aiInsights,
+		}
+
+		res.status(200).json(responseData)
 	} catch (error) {
 		console.error('Error saat mengambil data pengguna:', error)
 		res.status(500).json({ error: error.message })
@@ -251,6 +310,19 @@ router.put(
 			const userData = userDoc.data()
 
 			let profilePicPath = userData.profilePic
+
+			// Hapus file lama di storage jika ada dan bukan gambar default
+			if (
+				profilePicPath &&
+				profilePicPath !== 'budgetlyApp/profiles/person_default.png'
+			) {
+				const oldFile = storageBucket.file(profilePicPath)
+				await oldFile.delete().catch((err) => {
+					console.error(`Error menghapus file lama: ${err.message}`)
+				})
+			}
+
+			// Simpan file baru ke Firebase Storage
 			if (req.file) {
 				const uniqueFileName = `budgetlyApp/profiles/${uuidv4()}-${
 					req.file.originalname
@@ -264,6 +336,7 @@ router.put(
 				profilePicPath = uniqueFileName
 			}
 
+			// Update path gambar di Firestore
 			await db.collection('users').doc(userId).update({
 				profilePic: profilePicPath,
 			})
@@ -277,6 +350,8 @@ router.put(
 		}
 	}
 )
+
+// Route untuk
 
 router.get('/', async (req, res) => {
 	try {
