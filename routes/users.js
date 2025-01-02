@@ -69,7 +69,7 @@ router.post('/register', upload.single('profilePic'), async (req, res) => {
 			profilePicPath = uniqueFileName
 		} else {
 			// Jika tidak ada file yang diunggah, gunakan foto default
-			profilePicPath = 'budgetlyApp/profiles/logo_budgetly.png' // Lokasi foto default
+			profilePicPath = 'budgetlyApp/profiles/person_default.png' // Lokasi foto default
 		}
 
 		// Simpan pengguna ke Firestore
