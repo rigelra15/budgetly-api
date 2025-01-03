@@ -108,14 +108,24 @@ router.delete('/:transactionId', async (req, res) => {
 	}
 })
 
-// Endpoint untuk mengupdate transaksi
-router.put('/:transactionId', async (req, res) => {
+// Endpoint untuk mengupdate transaksi yang sudah ada dengan foto dan catatan
+router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 	const { transactionId } = req.params
-	const { type, amount, category, date, description, currency, account } =
-		req.body
+	const {
+		userId,
+		type,
+		amount,
+		category,
+		date,
+		description,
+		currency,
+		account,
+		note,
+	} = req.body
 
 	if (
 		!transactionId ||
+		!userId ||
 		!type ||
 		!amount ||
 		!category ||
@@ -127,22 +137,53 @@ router.put('/:transactionId', async (req, res) => {
 	}
 
 	try {
+		// Konversi amount ke integer
 		const parsedAmount = parseInt(amount, 10)
 		if (isNaN(parsedAmount)) {
 			return res.status(400).json({ error: 'Amount harus berupa angka valid.' })
 		}
 
+		const transactionDoc = await db
+			.collection('transactions')
+			.doc(transactionId)
+			.get()
+
+		if (!transactionDoc.exists) {
+			return res.status(404).json({ error: 'Transaksi tidak ditemukan.' })
+		}
+
+		let photoPaths = transactionDoc.data().photos || []
+		if (req.files) {
+			// Simpan setiap file foto ke path "budgetly/transactions/{userId}/{transactionId}/{uuidv4}"
+			for (const file of req.files) {
+				const uniqueFileName = `budgetly/transactions/${userId}/${transactionId}/${uuidv4()}-${
+					file.originalname
+				}`
+				const fileRef = storageBucket.file(uniqueFileName)
+
+				await fileRef.save(file.buffer, {
+					metadata: { contentType: file.mimetype },
+				})
+
+				photoPaths.push(uniqueFileName)
+			}
+		}
+
+		// Simpan transaksi ke Firestore
 		await db
 			.collection('transactions')
 			.doc(transactionId)
 			.update({
+				userId,
 				type,
-				amount: parsedAmount,
+				amount: parsedAmount, // Simpan amount sebagai integer
 				category,
 				currency,
 				account,
 				date: new Date(date),
 				description: description || '',
+				note: note || '',
+				photos: photoPaths, // Simpan path foto di Firestore
 			})
 
 		res.status(200).json({ message: 'Transaksi berhasil diupdate.' })
@@ -200,6 +241,31 @@ router.get('/user/:userId', async (req, res) => {
 	} catch (error) {
 		console.error('Error saat mengambil data transaksi:', error)
 		res.status(500).json({ error: 'Gagal mengambil data transaksi.' })
+	}
+})
+
+// Endpoint untuk hapus semua data transaksi dari user ID
+router.delete('/user/:userId', async (req, res) => {
+	const { userId } = req.params
+
+	if (!userId) {
+		return res.status(400).json({ error: 'ID pengguna wajib diisi.' })
+	}
+
+	try {
+		const transactions = await db
+			.collection('transactions')
+			.where('userId', '==', userId)
+			.get()
+
+		const batch = db.batch()
+		transactions.docs.forEach((doc) => batch.delete(doc.ref))
+		await batch.commit()
+
+		res.status(200).json({ message: 'Transaksi pengguna berhasil dihapus.' })
+	} catch (error) {
+		console.error('Error menghapus transaksi pengguna:', error)
+		res.status(500).json({ error: 'Gagal menghapus transaksi pengguna.' })
 	}
 })
 
