@@ -177,35 +177,6 @@ router.get('/:transactionId', async (req, res) => {
 	}
 })
 
-router.get('/currency', async (req, res) => {
-	try {
-		const currencies = 'EUR,USD,CAD,IDR' // Mata uang yang ingin diambil
-		const apiUrl = `https://api.freecurrencyapi.com/v1/latest`
-
-		// Fetch dari API eksternal
-		const response = await axios.get(apiUrl, {
-			params: {
-				apikey: process.env.CURRENCY_API_KEY, // API Key FreeCurrencyAPI
-				currencies, // Mata uang yang dipilih
-			},
-		})
-
-		// Format data yang diterima
-		const currencyData = response.data.data
-
-		// Ubah data ke bentuk array (opsional jika diperlukan)
-		const currencyList = Object.keys(currencyData).map((currencyCode) => ({
-			currency: currencyCode,
-			rate: currencyData[currencyCode],
-		}))
-
-		res.status(200).json({ currencies: currencyList })
-	} catch (error) {
-		console.error('Error saat mengambil data mata uang:', error.message)
-		res.status(500).json({ error: 'Gagal mengambil data mata uang.' })
-	}
-})
-
 // Endpoint untuk mendapatkan foto transaksi dengan Signed URL
 router.get('/:transactionId/photos', async (req, res) => {
 	const { transactionId } = req.params

@@ -41,6 +41,7 @@ const transactionRoutes = require('./routes/transactions')
 const budgetRoutes = require('./routes/budgets')
 const savingsRoutes = require('./routes/savings')
 const aiRoutes = require('./routes/aiInsights')
+const currencyRoutes = require('./routes/currency')
 
 // Konfigurasi Express
 const app = express()
@@ -57,6 +58,7 @@ app.use('/api/transactions', transactionRoutes)
 app.use('/api/budgets', budgetRoutes)
 app.use('/api/savings', savingsRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/currency', currencyRoutes)
 
 // Endpoint Debug untuk Firebase Authentication
 app.get('/debug-auth', async (req, res) => {
