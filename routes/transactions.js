@@ -48,9 +48,9 @@ router.post('/add', upload.array('photos', 10), async (req, res) => {
 
 		let photoPaths = []
 		if (req.files) {
-			// Simpan setiap file foto ke path "budgetly/transactions/{userId}/{transactionId}/{uuidv4}"
+			// Simpan setiap file foto ke path "budgetlyApp/transactions/{userId}/{transactionId}/{uuidv4}"
 			for (const file of req.files) {
-				const uniqueFileName = `budgetly/transactions/${userId}/${transactionId}/${uuidv4()}-${
+				const uniqueFileName = `budgetlyApp/transactions/${userId}/${transactionId}/${uuidv4()}-${
 					file.originalname
 				}`
 				const fileRef = storageBucket.file(uniqueFileName)
@@ -90,7 +90,7 @@ router.post('/add', upload.array('photos', 10), async (req, res) => {
 	}
 })
 
-// Endpoint untuk menghapus transaksi
+// Endpoint untuk menghapus transaksi beserta foto yang terkait
 router.delete('/:transactionId', async (req, res) => {
 	const { transactionId } = req.params
 
@@ -99,11 +99,31 @@ router.delete('/:transactionId', async (req, res) => {
 	}
 
 	try {
+		const transactionDoc = await db
+			.collection('transactions')
+			.doc(transactionId)
+			.get()
+
+		if (!transactionDoc.exists) {
+			return res.status(404).json({ error: 'Transaksi tidak ditemukan.' })
+		}
+
+		const photoPaths = transactionDoc.data().photos || []
+
+		// Hapus setiap foto yang terkait dengan transaksi
+		await Promise.all(
+			photoPaths.map(async (filePath) => {
+				const fileRef = storageBucket.file(filePath)
+				await fileRef.delete()
+			})
+		)
+
+		// Hapus transaksi dari Firestore
 		await db.collection('transactions').doc(transactionId).delete()
 
 		res.status(200).json({ message: 'Transaksi berhasil dihapus.' })
 	} catch (error) {
-		console.error('Error menghapus transaksi:', error)
+		console.error('Error saat menghapus transaksi:', error)
 		res.status(500).json({ error: 'Gagal menghapus transaksi.' })
 	}
 })
@@ -154,9 +174,9 @@ router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 
 		let photoPaths = transactionDoc.data().photos || []
 		if (req.files) {
-			// Simpan setiap file foto ke path "budgetly/transactions/{userId}/{transactionId}/{uuidv4}"
+			// Simpan setiap file foto ke path "budgetlyApp/transactions/{userId}/{transactionId}/{uuidv4}"
 			for (const file of req.files) {
-				const uniqueFileName = `budgetly/transactions/${userId}/${transactionId}/${uuidv4()}-${
+				const uniqueFileName = `budgetlyApp/transactions/${userId}/${transactionId}/${uuidv4()}-${
 					file.originalname
 				}`
 				const fileRef = storageBucket.file(uniqueFileName)
