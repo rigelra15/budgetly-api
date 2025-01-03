@@ -141,6 +141,7 @@ router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 		currency,
 		account,
 		note,
+		deletedPhotos, // Tambahkan parameter untuk daftar foto yang akan dihapus
 	} = req.body
 
 	if (
@@ -173,8 +174,23 @@ router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 		}
 
 		let photoPaths = transactionDoc.data().photos || []
+
+		// Hapus foto berdasarkan deletedPhotos
+		if (deletedPhotos) {
+			const photosToDelete = JSON.parse(deletedPhotos)
+			photoPaths = photoPaths.filter((photo) => !photosToDelete.includes(photo))
+
+			// Hapus file dari penyimpanan (opsional, tergantung apakah ingin benar-benar menghapus file)
+			for (const photoPath of photosToDelete) {
+				const fileRef = storageBucket.file(photoPath)
+				await fileRef
+					.delete()
+					.catch((err) => console.error('Gagal menghapus foto:', err))
+			}
+		}
+
+		// Tambahkan foto baru yang diunggah
 		if (req.files) {
-			// Simpan setiap file foto ke path "budgetlyApp/transactions/{userId}/{transactionId}/{uuidv4}"
 			for (const file of req.files) {
 				const uniqueFileName = `budgetlyApp/transactions/${userId}/${transactionId}/${uuidv4()}-${
 					file.originalname
@@ -203,7 +219,7 @@ router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 				date: new Date(date),
 				description: description || '',
 				note: note || '',
-				photos: photoPaths, // Simpan path foto di Firestore
+				photos: photoPaths, // Simpan path foto terbaru di Firestore
 			})
 
 		res.status(200).json({ message: 'Transaksi berhasil diupdate.' })
