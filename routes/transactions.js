@@ -128,7 +128,6 @@ router.delete('/:transactionId', async (req, res) => {
 	}
 })
 
-// Endpoint untuk mengupdate transaksi yang sudah ada dengan foto dan catatan
 router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 	const { transactionId } = req.params
 	const {
@@ -141,7 +140,7 @@ router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 		currency,
 		account,
 		note,
-		deletedPhotos, // Tambahkan parameter untuk daftar foto yang akan dihapus
+		deletedPhotos, // Diterima sebagai array foto yang akan dihapus
 	} = req.body
 
 	if (
@@ -164,6 +163,7 @@ router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 			return res.status(400).json({ error: 'Amount harus berupa angka valid.' })
 		}
 
+		// Ambil dokumen transaksi dari database
 		const transactionDoc = await db
 			.collection('transactions')
 			.doc(transactionId)
@@ -178,14 +178,26 @@ router.put('/:transactionId', upload.array('photos', 10), async (req, res) => {
 		// Hapus foto berdasarkan deletedPhotos
 		if (deletedPhotos) {
 			const photosToDelete = JSON.parse(deletedPhotos)
-			photoPaths = photoPaths.filter((photo) => !photosToDelete.includes(photo))
 
-			// Hapus file dari penyimpanan (opsional, tergantung apakah ingin benar-benar menghapus file)
-			for (const photoPath of photosToDelete) {
+			// Ekstrak path relatif dari signed URL
+			const extractedPaths = photosToDelete.map((signedUrl) => {
+				const parsedUrl = new URL(signedUrl)
+				return decodeURIComponent(
+					parsedUrl.pathname.split('/').slice(2).join('/')
+				)
+			})
+
+			// Filter foto yang tidak ada di extractedPaths
+			photoPaths = photoPaths.filter((photo) => !extractedPaths.includes(photo))
+
+			// Hapus file dari storage
+			for (const photoPath of extractedPaths) {
 				const fileRef = storageBucket.file(photoPath)
 				await fileRef
 					.delete()
-					.catch((err) => console.error('Gagal menghapus foto:', err))
+					.catch((err) =>
+						console.error('Gagal menghapus foto:', photoPath, err)
+					)
 			}
 		}
 
