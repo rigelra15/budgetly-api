@@ -177,6 +177,32 @@ router.get('/:transactionId', async (req, res) => {
 	}
 })
 
+// Endpoint untuk mendapatkan daftar transaksi berdasarkan user ID
+router.get('/user/:userId', async (req, res) => {
+	const { userId } = req.params
+
+	if (!userId) {
+		return res.status(400).json({ error: 'ID pengguna wajib diisi.' })
+	}
+
+	try {
+		const transactions = await db
+			.collection('transactions')
+			.where('userId', '==', userId)
+			.get()
+
+		const transactionList = transactions.docs.map((doc) => ({
+			...doc.data(),
+			transactionId: doc.id,
+		}))
+
+		res.status(200).json({ transactions: transactionList })
+	} catch (error) {
+		console.error('Error saat mengambil data transaksi:', error)
+		res.status(500).json({ error: 'Gagal mengambil data transaksi.' })
+	}
+})
+
 // Endpoint untuk mendapatkan foto transaksi dengan Signed URL
 router.get('/:transactionId/photos', async (req, res) => {
 	const { transactionId } = req.params
